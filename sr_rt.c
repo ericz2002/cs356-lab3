@@ -395,8 +395,8 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
     /* Lab5: Fill your code here */
     sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t));
     sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-    struct sr_rt *rt = sr->routing_table;
-    for(int i = 0; i < MAX_NUM_ENTRIES; i++){
+    int i = 0;
+    for(i = 0; i < MAX_NUM_ENTRIES; i++){
         struct sr_rt *entry = NULL;
         struct entry *rp_entry = &(rip_hdr->entries[i]);
         if(rp_entry->address == 0){
@@ -412,7 +412,7 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
                     entry->metric = metric_new;
                     entry->gw.s_addr = ip_hdr->ip_src;
                     memcpy(entry->interface, interface, sr_IFACE_NAMELEN);
-                    time(entry->updated_time);
+                    time(&(entry->updated_time));
                 }
                 break;
             }
@@ -422,6 +422,6 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
         }
 
     }
-    send_rip_respone(sr);
+    send_rip_response(sr);
     pthread_mutex_unlock(&(sr->rt_locker));
 }
