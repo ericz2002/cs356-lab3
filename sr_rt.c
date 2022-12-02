@@ -395,27 +395,27 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
     /* Lab5: Fill your code here */
     sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t))
     struct sr_rt *rt = sr->routing_table;
-    for(entry = rip_hdr->entries; entry->afi != 0; entry++){
+    for(int i = 0; i < MAX_NUM_ENTRIES; i++){
         while(rt){
-            if(rt->dest.s_addr == entry->address && rt->mask.s_addr == entry->mask){
-                if(rt->gw.s_addr == entry->next_hop){
-                    if(entry->metric == htonl(INFINITY)){
+            if(rt->dest.s_addr == rip_hdr->entries[i].address && rt->mask.s_addr == rip_hdr->entries[i].mask){
+                if(rt->gw.s_addr == rip_hdr->entries[i].next_hop){
+                    if(rip_hdr->entries[i].metric == htonl(INFINITY)){
                             rt->metric = INFINITY;
                     }
-                    if(rt->metric > ntohl(entry->metric) + 1){
-                        rt->metric = ntohl(entry->metric) + 1;
+                    if(rt->metric > ntohl(rip_hdr->entries[i].metric) + 1){
+                        rt->metric = ntohl(rip_hdr->entries[i].metric) + 1;
                         rt->interface = interface;
                     }
                 }
                 else{
-                    if(rt->metric > ntohl(entry->metric)){
-                        rt->metric = ntohl(entry->metric);
+                    if(rt->metric > ntohl(rip_hdr->entries[i].metric)){
+                        rt->metric = ntohl(rip_hdr->entries[i].metric);
                         rt->interface = interface;
                     }
                 }
             }
             else{
-                sr_add_rt_entry(sr, entry->address, entry->mask, entry->next_hop, ntohl(entry->metric) + 1, interface);
+                sr_add_rt_entry(sr, rip_hdr->entries[i].address, rip_hdr->entries[i].mask, rip_hdr->entries[i].next_hop, ntohl(rip_hdr->entries[i].metric) + 1, interface);
             }
             rt = rt->next;
         }
