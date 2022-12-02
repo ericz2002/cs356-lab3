@@ -393,32 +393,34 @@ void send_rip_response(struct sr_instance *sr){
 void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface){
     pthread_mutex_lock(&(sr->rt_locker));
     /* Lab5: Fill your code here */
-    sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t))
+    sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t));
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
     struct sr_rt *rt = sr->routing_table;
     for(int i = 0; i < MAX_NUM_ENTRIES; i++){
-        while(rt){
-            if(rt->dest.s_addr == rip_hdr->entries[i].address && rt->mask.s_addr == rip_hdr->entries[i].mask){
-                if(rt->gw.s_addr == rip_hdr->entries[i].next_hop){
-                    if(rip_hdr->entries[i].metric == htonl(INFINITY)){
-                            rt->metric = INFINITY;
-                    }
-                    if(rt->metric > ntohl(rip_hdr->entries[i].metric) + 1){
-                        rt->metric = ntohl(rip_hdr->entries[i].metric) + 1;
-                        rt->interface = interface;
-                    }
-                }
-                else{
-                    if(rt->metric > ntohl(rip_hdr->entries[i].metric)){
-                        rt->metric = ntohl(rip_hdr->entries[i].metric);
-                        rt->interface = interface;
-                    }
-                }
-            }
-            else{
-                sr_add_rt_entry(sr, rip_hdr->entries[i].address, rip_hdr->entries[i].mask, rip_hdr->entries[i].next_hop, ntohl(rip_hdr->entries[i].metric) + 1, interface);
-            }
-            rt = rt->next;
+        struct sr_rt *entry = NULL;
+        struct entry *rp_entry = &(rip_hdr->entries[i]);
+        if(rp_entry->address == 0){
+            continue;
         }
+        uint32_t metric_new = ntohl(rp_entry->metric) + 1;
+        if(metric_new >= INFINITY){
+            continue;
+        }
+        for(entry = sr->routing_table; entry; entry = entry->next){
+            if((rp_entry->address & rp_entry->mask) == (entry->dest.s_addr & entry->mask.s_addr) ){
+                if (entry->gw.s_addr == ip_hdr->ip_src || metric_new < entry->metric){
+                    entry->metric = metric_new;
+                    entry->gw.s_addr = ip_hdr->ip_src;
+                    memcpy(entry->interface, interface, sr_IFACE_NAMELEN);
+                    time(entry->updated_time);
+                }
+                break;
+            }
+        if(entry == NULL){
+            sr_add_rt_entry(sr, (struct in_addr){rp_entry->address}, (struct in_addr){ip_hdr->ip_src}, (struct in_addr){rp_entry->mask}, metric_new, interface);
+        }
+        }
+
     }
     send_rip_respone(sr);
     pthread_mutex_unlock(&(sr->rt_locker));
