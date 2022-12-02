@@ -396,12 +396,12 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
     sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t))
     struct sr_rt *rt = sr->routing_table;
     for(entry = rip_hdr->entries; entry->afi != 0; entry++){
-        if(entry->metric == htonl(INFINITY)){
-            continue;
-        }
         while(rt){
             if(rt->dest.s_addr == entry->address && rt->mask.s_addr == entry->mask){
                 if(rt->gw.s_addr == entry->next_hop){
+                    if(entry->metric == htonl(INFINITY)){
+                            rt->metric = INFINITY;
+                    }
                     if(rt->metric > ntohl(entry->metric) + 1){
                         rt->metric = ntohl(entry->metric) + 1;
                         rt->interface = interface;
@@ -414,8 +414,12 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
                     }
                 }
             }
+            else{
+                sr_add_rt_entry(sr, entry->address, entry->mask, entry->next_hop, ntohl(entry->metric) + 1, interface);
+            }
             rt = rt->next;
         }
     }
+    send_rip_respone(sr);
     pthread_mutex_unlock(&(sr->rt_locker));
 }
