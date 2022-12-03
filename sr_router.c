@@ -193,7 +193,8 @@ void sr_handlepacket(struct sr_instance* sr,
       }
 
       /* Check if ip_dst is a broadcast ip */
-      if (ip_hdr->ip_dst == 0xFFFFFFFF) {
+      printf("IP dst: %d \n", ip_hdr->ip_dst);
+      if (ip_hdr->ip_dst == htonl(0xFFFFFFFF)) {
         printf("Got broadcast IP packet \n");
         /* Check if UDP */
         if (ip_hdr->ip_p == ip_protocol_udp) {
@@ -211,7 +212,7 @@ void sr_handlepacket(struct sr_instance* sr,
             } else if (rip_hdr->command == 2) {
               printf("Got RIP response \n");
               /* Update routing table */
-              update_route_table(sr, rip_hdr, len, interface);
+              update_route_table(sr, packet, len, interface);
             }
           } else {
             /* Send ICMP port unreachable */
