@@ -320,12 +320,15 @@ void sr_handlepacket(struct sr_instance* sr,
             if (dest_mac_loopup == NULL) {
               printf("No ARP entry found. \n");
               sr_print_routing_table(sr);
+              memset(reply_eth_hdr->ether_dhost, 0xff, ETHER_ADDR_LEN);
             }
-
+            else{
+              memcpy(reply_eth_hdr->ether_dhost, dest_mac_loopup->mac, ETHER_ADDR_LEN);  
+            }
             /* Serialize Ethernet Header */
             sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)(icmp_echo_reply);
             reply_eth_hdr->ether_type = htons(ethertype_ip);
-            memcpy(reply_eth_hdr->ether_dhost, dest_mac_loopup->mac, ETHER_ADDR_LEN);
+            
             memcpy(reply_eth_hdr->ether_shost, recv_if->addr, ETHER_ADDR_LEN);
             printf("done. \n");
 
