@@ -225,7 +225,81 @@ void *sr_rip_timeout(void *sr_ptr) {
         pthread_mutex_lock(&(sr->rt_locker));
         /* Lab5: Fill your code here */
 
+        /* struct sr_rt* rt_walker = 0;
+        if(sr->routing_table == 0)
+        {
+            printf(" *warning* Routing table empty \n");
+            pthread_mutex_unlock(&(sr->rt_locker));
+            return 
+        } */
         
+        struct sr_rt* rt_walker = sr->routing_table;
+        while(rt_walker){
+            if (rt_walker->metric < INFINITY) {
+                time_t now;
+                time(&now);
+                if (difftime(now, rt_walker->updated_time) > 20) {
+                    rt_walker->metric = INFINITY;
+                    /* printf("Timeout: "); */
+                    sr_print_routing_entry(rt_walker);
+                }
+            }
+            rt_walker = rt_walker->next;
+        }
+
+        /* check status of router's own interfaces */
+        struct sr_if* interface = sr->if_list;
+        while (interface) {
+            if (interface->status == 0) {
+                printf("Interface %s is down \n", interface->name);
+                /*
+                struct in_addr dest_addr;
+                dest_addr.s_addr = (interface->ip & interface->mask);
+                */
+                struct sr_rt* rt_walker = 0;
+                rt_walker = sr->routing_table;
+                while(rt_walker){
+                  /* rt_walker->dest.s_addr == dest_addr.s_addr */
+                  if (rt_walker->metric < INFINITY && strcmp(interface->name, rt_walker->interface) == 0) {
+                      rt_walker->metric = INFINITY;
+                      /* printf("Timeout: "); */
+                      sr_print_routing_entry(rt_walker);
+                  }
+                  rt_walker = rt_walker->next;
+                }
+            } else {
+                printf("Interface %s is up \n", interface->name);
+                int found = 0;
+                struct sr_rt* rt_walker = 0;
+                rt_walker = sr->routing_table;
+                while(rt_walker){
+                  if ((rt_walker->dest.s_addr & rt_walker->mask.s_addr) == (interface->ip & interface->mask) && rt_walker->mask.s_addr == interface->mask) {
+                    printf("timeout update time\n");
+                    rt_walker->updated_time = time(NULL);
+                    rt_walker->metric = 0;
+                    rt_walker->gw.s_addr = 0;
+                    strcpy(rt_walker->interface, interface->name);
+                    found = 1;
+                  }
+                  rt_walker = rt_walker->next;
+                }
+                if (found == 0) {
+                  struct in_addr dest_addr;
+                  dest_addr.s_addr = interface->ip;
+                  struct in_addr gw_addr;
+                  gw_addr.s_addr = 0x0;
+                  struct in_addr mask_addr;
+                  mask_addr.s_addr = interface->mask;
+                  sr_add_rt_entry(sr, dest_addr, gw_addr, mask_addr, interface->name, 0);
+                }
+                /* check if routing table contains this interface */
+                
+            }
+            interface = interface->next;
+        }
+
+        /* call send_rip_response */
+        send_rip_response(sr);
         
         pthread_mutex_unlock(&(sr->rt_locker));
     }

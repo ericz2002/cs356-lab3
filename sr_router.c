@@ -563,7 +563,14 @@ void sr_handlepacket(struct sr_instance* sr,
               arp_hdr->ar_op = htons(arp_op_request);
               arp_hdr->ar_sip = tgt_if->ip;
               memcpy(arp_hdr->ar_sha, tgt_if->addr, ETHER_ADDR_LEN);
-              arp_hdr->ar_tip = ip_hdr->ip_dst;
+              if(tgt_rt->gw.s_addr != 0){
+                printf("Target has nonzero gateway in routing table. Requesting gateway MAC address\n");
+                arp_hdr->ar_tip = tgt_rt->gw.s_addr;
+              }
+              else{
+                printf("Target is on this network. Requesting target MAC address\n");
+                arp_hdr->ar_tip = ip_hdr->ip_dst;
+              }
               memcpy(arp_hdr->ar_tha, unknown, ETHER_ADDR_LEN);
 
               sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t *)(arp_req);
