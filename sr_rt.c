@@ -223,6 +223,8 @@ void *sr_rip_timeout(void *sr_ptr) {
     while (1) {
         sleep(5);
         pthread_mutex_lock(&(sr->rt_locker));
+        /* Lab5: Fill your code here */
+
         
         
         pthread_mutex_unlock(&(sr->rt_locker));
@@ -263,7 +265,7 @@ void send_rip_request(struct sr_instance *sr){
   ip_hdr->ip_dst = htonl(broadcast_ip);
   ip_hdr->ip_id = htons(0);
   ip_hdr->ip_off = htons(IP_DF);
-  ip_hdr->ip_ttl = 100;
+  ip_hdr->ip_ttl = 64;
   ip_hdr->ip_p = ip_protocol_udp;
   printf("IP protocol (rip request): %d \n", ip_hdr->ip_p);
   ip_hdr->ip_sum = 0;
@@ -353,7 +355,7 @@ void send_rip_response(struct sr_instance *sr){
     ip_hdr->ip_dst = htonl(broadcast_ip);
     ip_hdr->ip_id = htons(0);
     ip_hdr->ip_off = htons(IP_DF);
-    ip_hdr->ip_ttl = 100;
+    ip_hdr->ip_ttl = 64;
     ip_hdr->ip_p = ip_protocol_udp;
     ip_hdr->ip_sum = 0;
     ip_hdr->ip_sum = cksum((uint8_t *)ip_hdr, sizeof(sr_ip_hdr_t));
@@ -373,11 +375,11 @@ void send_rip_response(struct sr_instance *sr){
     struct sr_rt *rt = sr->routing_table;
     
     i = 0;
-    printf("interface address: %d\n", ip_hdr->ip_src);
+    print_addr_ip_int(ip_hdr->ip_src);
     sr_print_routing_table(sr);
     /* ignore all routes with metric infinity */
-    while (rt && i<MAX_NUM_ENTRIES && rt->metric < INFINITY) {
-      sr_print_routing_entry(rt);
+    while (rt && i<MAX_NUM_ENTRIES && ntohl(rt->metric) < INFINITY) {
+      /* sr_print_routing_entry(rt); */
       if (rt->dest.s_addr == 0) {
         printf("Skip entry\n");
         rt = rt->next;
@@ -424,12 +426,12 @@ void send_rip_response(struct sr_instance *sr){
 
       /* split horizion (with poison reverse): if interface == next hop set metric to infinity (unreachable) */
       for (i=0; i<MAX_NUM_ENTRIES; i++) {
-        if (rip_hdr->entries[i].metric > INFINITY && rip_hdr->entries[i].address != 0) {
+        if (ntohl(rip_hdr->entries[i].metric) >= INFINITY && rip_hdr->entries[i].address != 0) {
           continue;
         }
         if (rip_hdr->entries[i].next_hop == interface->ip && rip_hdr->entries[i].mask == interface->mask) {
           printf("Poison reverse, delete entry\n");
-          rip_hdr->entries[i].metric = INFINITY;
+          rip_hdr->entries[i].metric = htonl(INFINITY);
         }
       }
       print_hdrs(packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t));
@@ -452,6 +454,7 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
     /* Lab5: Fill your code here */
     sr_rip_pkt_t* rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_ip_hdr_t));
     sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    int isUpdated = 0;
     
     int i = 0;
     for(i = 0; i < MAX_NUM_ENTRIES; i++){
@@ -471,6 +474,10 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
           printf("Found entry in routing table\n");
             if (entry->gw.s_addr == ip_hdr->ip_src || metric_new < entry->metric){
               printf("Packet is from same router as entry or metric is less than current metric; update entry\n");
+              if (metric_new != entry->metric || ip_hdr->ip_src != entry->gw.s_addr || strcmp(entry->interface, interface) !=0) {
+                printf("No changes\n");
+                isUpdated = 1;
+              }
               entry->metric = metric_new;
               entry->gw.s_addr = ip_hdr->ip_src;
               memcpy(entry->interface, interface, sr_IFACE_NAMELEN);
@@ -481,10 +488,14 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
         
       }
       if(entry == NULL){
-          printf("Entry not found in routing table, add new entry\n");
+          printf("Entry not found in routing table, add new entry; metric: %u\n", metric_new);
           sr_add_rt_entry(sr, (struct in_addr){rp_entry->address}, (struct in_addr){ip_hdr->ip_src}, (struct in_addr){rp_entry->mask}, metric_new, interface);
+          isUpdated = 1;
       }
     }
-    send_rip_response(sr);
+    if (isUpdated) {
+      printf("Routing table updated, send RIP response\n");
+      send_rip_response(sr);
+    }
     pthread_mutex_unlock(&(sr->rt_locker));
 }

@@ -274,7 +274,7 @@ void sr_handlepacket(struct sr_instance* sr,
           printf("Packet is for me \n");
           /* Check if dst interface status is up */
           uint32_t status = sr_obtain_interface_status(sr, tgt_if->name);
-          printf("Interface status %s: %d \n", tgt_if->name, status);
+          printf("Destination Interface status %s: %d \n", tgt_if->name, status);
           if (status == 1 && ip_hdr->ip_p == ip_protocol_icmp) {
             /* Get ICMP header */
             printf("Got ICMP header \n");
@@ -316,6 +316,11 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("done. \nMaking Ethernet header...");
             /* Check ARP Cache */
             struct sr_arpentry* dest_mac_loopup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_src);
+
+            if (dest_mac_loopup == NULL) {
+              printf("No ARP entry found. \n");
+              sr_print_routing_table(sr);
+            }
 
             /* Serialize Ethernet Header */
             sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)(icmp_echo_reply);
@@ -410,11 +415,21 @@ void sr_handlepacket(struct sr_instance* sr,
           printf("Sent! \n");
           free(icmp_err_reply);
         } else {
+          printf("Finding Longest Prefix Match\n");
+
+          /* Find Longest Prefix Match of the destination IP in routing table */
+
+
           /* Check for destination in routing table */
           struct sr_rt* tgt_rt = NULL;
           struct sr_rt* sch_rt = sr->routing_table;
           while (sch_rt != NULL) {
-            if (sch_rt->dest.s_addr == ip_hdr->ip_dst) {
+            if (ntohl(sch_rt->metric) >= INFINITY) {
+              sch_rt = sch_rt->next;
+              continue;
+            }
+            if ((sch_rt->dest.s_addr & sch_rt->mask.s_addr) == (ip_hdr->ip_dst & sch_rt->mask.s_addr)) {
+              printf("Found in routing table\n");
               if (tgt_rt == NULL) {
                 tgt_rt = sch_rt;
               } else {
@@ -432,9 +447,11 @@ void sr_handlepacket(struct sr_instance* sr,
             sch_rt = sch_rt->next;
           }
 
-          uint32_t status = sr_obtain_interface_status(sr, tgt_rt->interface);
-          printf("Interface status: %d\n", status);
-
+          uint32_t status = 0;
+          if (tgt_rt != NULL) {
+            status = sr_obtain_interface_status(sr, tgt_rt->interface);
+          } 
+          printf("Outgoing Interface status: %d\n", status);
           if (tgt_rt == NULL || status == 0) {
             /* Couldn't find destination */
             /* Send Destination Net Unreachable */
@@ -475,6 +492,7 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("Sent! \n");
             free(icmp_err_reply);
           } else {
+            /* TODO: lab3 update forwarding logic */
             /* Found destination */
             struct sr_if* tgt_if = sr_get_interface(sr, tgt_rt->interface);
             printf("Found destination, sending from interface %s. \n", tgt_if->name);
@@ -486,7 +504,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
             sr_ip_hdr_t* fwd_ip_hdr = (sr_ip_hdr_t *)(packet_forward + sizeof(sr_ethernet_hdr_t));
             fwd_ip_hdr->ip_sum += 1;
-
+            printf("IP destination: \n");
+            print_addr_ip_int(ip_hdr->ip_dst);
             struct sr_arpentry* dest_mac_lookup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
             sr_ethernet_hdr_t* fwd_eth_hdr = (sr_ethernet_hdr_t *)(packet_forward);
             fwd_eth_hdr->ether_type = htons(ethertype_ip);
