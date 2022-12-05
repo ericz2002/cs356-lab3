@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -316,16 +317,19 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("done. \nMaking Ethernet header...");
             /* Check ARP Cache */
             struct sr_arpentry* dest_mac_loopup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_src);
+            sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)(icmp_echo_reply);
 
             if (dest_mac_loopup == NULL) {
               printf("No ARP entry found. \n");
               sr_print_routing_table(sr);
+              memset(reply_eth_hdr->ether_dhost, 0xff, ETHER_ADDR_LEN);
             }
-
+            else{
+              memcpy(reply_eth_hdr->ether_dhost, dest_mac_loopup->mac, ETHER_ADDR_LEN);  
+            }
             /* Serialize Ethernet Header */
-            sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)(icmp_echo_reply);
             reply_eth_hdr->ether_type = htons(ethertype_ip);
-            memcpy(reply_eth_hdr->ether_dhost, dest_mac_loopup->mac, ETHER_ADDR_LEN);
+            
             memcpy(reply_eth_hdr->ether_shost, recv_if->addr, ETHER_ADDR_LEN);
             printf("done. \n");
 
@@ -424,7 +428,7 @@ void sr_handlepacket(struct sr_instance* sr,
           struct sr_rt* tgt_rt = NULL;
           struct sr_rt* sch_rt = sr->routing_table;
           while (sch_rt != NULL) {
-            if (ntohl(sch_rt->metric) >= INFINITY) {
+            if (sch_rt->metric >= INFINITY) {
               sch_rt = sch_rt->next;
               continue;
             }
@@ -452,6 +456,7 @@ void sr_handlepacket(struct sr_instance* sr,
             status = sr_obtain_interface_status(sr, tgt_rt->interface);
           } 
           printf("Outgoing Interface status: %d\n", status);
+          sr_print_routing_table(sr);
           if (tgt_rt == NULL || status == 0) {
             /* Couldn't find destination */
             /* Send Destination Net Unreachable */
@@ -481,9 +486,17 @@ void sr_handlepacket(struct sr_instance* sr,
 
             struct sr_arpentry* dest_mac_lookup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_src);
             sr_ethernet_hdr_t* reply_eth_hdr = (sr_ethernet_hdr_t *)(icmp_err_reply);
+            if(dest_mac_lookup == NULL){
+              printf("Destination MAC not found in cache. \n");
+              sr_print_routing_table(sr);
+              memset(reply_eth_hdr->ether_dhost, 0xff, ETHER_ADDR_LEN);
+            }else{
+              printf("Destination MAC found in cache. \n");
+              memcpy(reply_eth_hdr->ether_dhost, dest_mac_lookup->mac, ETHER_ADDR_LEN);
+            }
+            
             reply_eth_hdr->ether_type = htons(ethertype_ip);
             memcpy(reply_eth_hdr->ether_shost, recv_if->addr, ETHER_ADDR_LEN);
-            memcpy(reply_eth_hdr->ether_dhost, dest_mac_lookup->mac, ETHER_ADDR_LEN);
 
             int err = sr_send_packet(sr, icmp_err_reply, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t), interface);
             if (err) {
@@ -505,8 +518,18 @@ void sr_handlepacket(struct sr_instance* sr,
             sr_ip_hdr_t* fwd_ip_hdr = (sr_ip_hdr_t *)(packet_forward + sizeof(sr_ethernet_hdr_t));
             fwd_ip_hdr->ip_sum += 1;
             printf("IP destination: \n");
-            print_addr_ip_int(ip_hdr->ip_dst);
-            struct sr_arpentry* dest_mac_lookup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+            print_addr_ip_int(ntohl(ip_hdr->ip_dst));
+            struct sr_arpentry* dest_mac_lookup;
+            if(tgt_rt->gw.s_addr != 0){
+              dest_mac_lookup = sr_arpcache_lookup(&sr->cache, tgt_rt->gw.s_addr);
+              printf("Target has nonzero gateway in routing table. Gateway address: \n");
+              print_addr_ip_int(ntohl(tgt_rt->gw.s_addr));
+            }
+            else{
+              dest_mac_lookup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+              printf("Target is on this network. Target IP: ");
+              print_addr_ip_int(ip_hdr->ip_dst);
+            }
             sr_ethernet_hdr_t* fwd_eth_hdr = (sr_ethernet_hdr_t *)(packet_forward);
             fwd_eth_hdr->ether_type = htons(ethertype_ip);
             memcpy(fwd_eth_hdr->ether_shost, tgt_if->addr, ETHER_ADDR_LEN);
