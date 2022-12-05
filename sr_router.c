@@ -339,11 +339,11 @@ void sr_handlepacket(struct sr_instance* sr,
             }
             free(icmp_echo_reply);
           } else {
-            printf("Sending destination port unreachable \n");
+            printf("Sending destination net unreachable. \n");
             uint8_t* icmp_err_reply = (uint8_t *)malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
             sr_icmp_t3_hdr_t* reply_icmp_hdr = (sr_icmp_t3_hdr_t *)(icmp_err_reply + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
             reply_icmp_hdr->icmp_type = 3;
-            reply_icmp_hdr->icmp_code = 3;
+            reply_icmp_hdr->icmp_code = 0;
             int i;
             for (i = 0; i < ICMP_DATA_SIZE; i++) {
               reply_icmp_hdr->data[i] = *((uint8_t *)(ip_hdr) + i);
@@ -357,7 +357,7 @@ void sr_handlepacket(struct sr_instance* sr,
             reply_ip_hdr->ip_src = recv_if->ip;
             reply_ip_hdr->ip_dst = ip_hdr->ip_src;
             reply_ip_hdr->ip_id = ip_hdr->ip_id;
-            reply_ip_hdr->ip_off = ip_hdr->ip_off;
+            reply_ip_hdr->ip_off = htons(IP_DF);
             reply_ip_hdr->ip_ttl = 100;
             reply_ip_hdr->ip_p = ip_protocol_icmp;
             reply_ip_hdr->ip_sum = 0;
