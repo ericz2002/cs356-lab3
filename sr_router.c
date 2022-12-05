@@ -536,6 +536,16 @@ void sr_handlepacket(struct sr_instance* sr,
             if (dest_mac_lookup == NULL) {
               /* couldn't find MAC, send ARP request and cache */
               printf("Couldn't find MAC, caching and sending ARP request. \n");
+              if(tgt_rt->gw.s_addr != 0){
+                printf("Target has nonzero gateway in routing table. Gateway address: \n");
+                print_addr_ip_int(ntohl(tgt_rt->gw.s_addr));
+                sr_arpcache_queuereq(&sr->cache, tgt_rt->gw.s_addr, packet_forward, len, tgt_if->name);
+              }
+              else{
+                printf("Target is on this network. Target IP: ");
+                print_addr_ip_int(ip_hdr->ip_dst);
+                sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, packet_forward, len, tgt_if->name);
+              }
               unsigned char broadcast[ETHER_ADDR_LEN];
               unsigned char unknown[ETHER_ADDR_LEN];
               int i;
@@ -565,7 +575,7 @@ void sr_handlepacket(struct sr_instance* sr,
               if (err) {
                 fprintf(stderr, "Error sending packet: %d\n", err);
               }
-              sr_arpcache_queuereq(&(sr->cache), ip_hdr->ip_dst, packet_forward, len, tgt_if->name);
+              
               free(arp_req);
             } else {
               printf("Found destination MAC, sending...");

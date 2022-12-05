@@ -89,6 +89,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
           while (sch_rt != NULL) {
             if (sch_rt->dest.s_addr == it->ip) {
               if (tgt_rt == NULL) {
+                printf("Found exact match\n");
                 tgt_rt = sch_rt;
               } else {
                 struct sr_if* this_if = sr_get_interface(sr, sch_rt->interface);
