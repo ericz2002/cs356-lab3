@@ -455,15 +455,20 @@ void send_rip_response(struct sr_instance *sr){
       sr_print_routing_table(sr);
       int i =0;
       while (rt) {
-        if (strcmp(rt->interface, interface->name) !=0) {
           rip_hdr->entries[i].afi = htons(2);
           rip_hdr->entries[i].tag = htons(0);
           rip_hdr->entries[i].address = rt->dest.s_addr;
           rip_hdr->entries[i].mask = rt->mask.s_addr;
           rip_hdr->entries[i].next_hop = rt->gw.s_addr;
-          rip_hdr->entries[i].metric = rt->metric;
+
+          if((interface->ip & rt->mask.s_addr) == (rt->gw.s_addr & rt->mask.s_addr)){
+            printf("reverse poisoning split horizon. Set metric to infinity.\n");
+            rip_hdr->entries[i].metric = htonl(INFINITY);
+          }
+          else{
+            rip_hdr->entries[i].metric = htonl(rt->metric);
+          }
           i++;
-        }
         rt = rt->next;
       }
       int err = sr_send_packet(sr, packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t), interface->name);
@@ -496,7 +501,6 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
       }
       uint32_t metric_new = ntohl(rp_entry->metric) + 1;
       if(metric_new >= INFINITY){
-        printf("Metric is infinity, skip\n");
         continue;
       }
       for(entry = sr->routing_table; entry!=NULL; entry = entry->next){
@@ -508,8 +512,10 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
                 printf("No changes\n");
                 isUpdated = 1;
               }
+              entry->dest.s_addr = rp_entry->address;
               entry->metric = metric_new;
               entry->gw.s_addr = ip_hdr->ip_src;
+              entry->mask.s_addr = rp_entry->mask;
               memcpy(entry->interface, interface, sr_IFACE_NAMELEN);
               time(&(entry->updated_time));
             }
@@ -525,7 +531,6 @@ void update_route_table(struct sr_instance *sr, uint8_t *packet, unsigned int le
     }
     if (isUpdated) {
       printf("Routing table updated, send RIP response\n");
-      sr_print_routing_table(sr);
       send_rip_response(sr);
     }
     pthread_mutex_unlock(&(sr->rt_locker));

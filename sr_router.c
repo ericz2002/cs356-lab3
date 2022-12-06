@@ -321,7 +321,6 @@ void sr_handlepacket(struct sr_instance* sr,
 
             if (dest_mac_loopup == NULL) {
               printf("No ARP entry found. \n");
-              sr_print_routing_table(sr);
               memset(reply_eth_hdr->ether_dhost, 0xff, ETHER_ADDR_LEN);
             }
             else{
@@ -456,7 +455,6 @@ void sr_handlepacket(struct sr_instance* sr,
             status = sr_obtain_interface_status(sr, tgt_rt->interface);
           } 
           printf("Outgoing Interface status: %d\n", status);
-          sr_print_routing_table(sr);
           if (tgt_rt == NULL || status == 0) {
             /* Couldn't find destination */
             /* Send Destination Net Unreachable */
