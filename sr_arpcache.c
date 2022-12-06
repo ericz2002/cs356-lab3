@@ -87,7 +87,11 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
           struct sr_rt* tgt_rt = NULL;
           struct sr_rt* sch_rt = sr->routing_table;
           while (sch_rt != NULL) {
-            if (sch_rt->dest.s_addr == it->ip) {
+            if(sch_rt->metric >= INFINITY){
+                sch_rt = sch_rt->next;
+                continue;
+            }
+            if ((sch_rt->dest.s_addr & sch_rt->mask.s_addr) == (it->ip & sch_rt->mask.s_addr)) {
               if (tgt_rt == NULL) {
                 printf("Found exact match\n");
                 tgt_rt = sch_rt;

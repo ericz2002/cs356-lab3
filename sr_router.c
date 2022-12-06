@@ -516,12 +516,12 @@ void sr_handlepacket(struct sr_instance* sr,
             sr_ip_hdr_t* fwd_ip_hdr = (sr_ip_hdr_t *)(packet_forward + sizeof(sr_ethernet_hdr_t));
             fwd_ip_hdr->ip_sum += 1;
             printf("IP destination: \n");
-            print_addr_ip_int(ntohl(ip_hdr->ip_dst));
+            print_addr_ip_int(ip_hdr->ip_dst);
             struct sr_arpentry* dest_mac_lookup;
             if(tgt_rt->gw.s_addr != 0){
               dest_mac_lookup = sr_arpcache_lookup(&sr->cache, tgt_rt->gw.s_addr);
               printf("Target has nonzero gateway in routing table. Gateway address: \n");
-              print_addr_ip_int(ntohl(tgt_rt->gw.s_addr));
+              print_addr_ip(tgt_rt->gw);
             }
             else{
               dest_mac_lookup = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
